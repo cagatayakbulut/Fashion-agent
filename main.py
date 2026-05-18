@@ -8,28 +8,22 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer
-)
-
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 
-# ENV LOAD
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+EXTRA_TELEGRAM_CHAT_IDS = os.getenv("EXTRA_TELEGRAM_CHAT_IDS", "")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-# RSS SOURCES
 RSS_FEEDS = [
     "https://www.dezeen.com/fashion/feed/",
     "https://fashionunited.com/rss/news",
@@ -38,7 +32,6 @@ RSS_FEEDS = [
 ]
 
 
-# COLLECT NEWS
 def collect_trends():
     items = []
 
@@ -59,9 +52,7 @@ def collect_trends():
     return items[:20]
 
 
-# AI REPORT
 def create_ai_report(items):
-
     content = "\n\n".join([
         f"Başlık: {item['title']}\n"
         f"Özet: {item['summary']}\n"
@@ -110,13 +101,10 @@ Kaynak içerikler:
     return response.output_text
 
 
-# TURKISH FONT
 def setup_turkish_font():
-
     font_name = "NotoSans"
     font_path = "NotoSans-Regular.ttf"
 
-    # Önce sistem fontlarına bak
     system_paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"
@@ -128,7 +116,6 @@ def setup_turkish_font():
             print(f"Font sistemden yüklendi: {path}")
             return font_name
 
-    # Yoksa indir
     font_url = "https://raw.githubusercontent.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf"
 
     print("Font indiriliyor...")
@@ -146,22 +133,16 @@ def setup_turkish_font():
     return font_name
 
 
-# CLEAN TEXT
 def clean_text(text):
-
     text = text.replace("**", "")
     text = text.replace("#", "")
     text = text.replace("---", "")
     text = text.replace("•", "-")
-
     return text
 
 
-# PDF CREATE
 def create_pdf(report_text):
-
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-
     filename = f"moda_tekstil_trend_raporu_{today}.pdf"
 
     font_name = setup_turkish_font()
@@ -212,11 +193,8 @@ def create_pdf(report_text):
     clean_report = clean_text(report_text)
 
     for line in clean_report.split("\n"):
-
         if line.strip():
-
             safe_line = html.escape(line.strip())
-
             story.append(
                 Paragraph(
                     safe_line,
@@ -229,45 +207,59 @@ def create_pdf(report_text):
     return filename
 
 
-# SEND TELEGRAM
-def send_pdf_to_telegram(filename):
+def get_all_chat_ids():
+    chat_ids = []
 
+    if TELEGRAM_CHAT_ID:
+        chat_ids.append(TELEGRAM_CHAT_ID.strip())
+
+    if EXTRA_TELEGRAM_CHAT_IDS:
+        extra_ids = EXTRA_TELEGRAM_CHAT_IDS.split(",")
+
+        for extra_id in extra_ids:
+            clean_id = extra_id.strip()
+
+            if clean_id:
+                chat_ids.append(clean_id)
+
+    return chat_ids
+
+
+def send_pdf_to_telegram(filename):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
 
-    with open(filename, "rb") as file:
+    chat_ids = get_all_chat_ids()
 
-        files = {
-            "document": file
-        }
+    for chat_id in chat_ids:
+        with open(filename, "rb") as file:
+            files = {
+                "document": file
+            }
 
-        data = {
-            "chat_id": TELEGRAM_CHAT_ID,
-            "caption": "Günlük Moda & Tekstil Trend Raporu hazırlandı."
-        }
+            data = {
+                "chat_id": chat_id,
+                "caption": "Günlük Moda & Tekstil Trend Raporu hazırlandı."
+            }
 
-        response = requests.post(
-            url,
-            data=data,
-            files=files
-        )
+            response = requests.post(
+                url,
+                data=data,
+                files=files
+            )
 
-    if response.status_code != 200:
-        raise Exception(
-            f"Telegram gönderim hatası: {response.text}"
-        )
+        if response.status_code == 200:
+            print(f"PDF gönderildi: {chat_id}")
+        else:
+            print(f"Telegram gönderim hatası - {chat_id}: {response.text}")
 
 
-# MAIN
 def main():
-
     print("Trendler toplanıyor...")
 
     items = collect_trends()
 
     if not items:
-        raise Exception(
-            "Trend kaynaklarından içerik alınamadı."
-        )
+        raise Exception("Trend kaynaklarından içerik alınamadı.")
 
     print("AI raporu hazırlanıyor...")
 

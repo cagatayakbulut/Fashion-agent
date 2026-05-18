@@ -57,13 +57,11 @@ Sen moda ve tekstil sektörünü takip eden profesyonel bir trend analistisin.
 
 Aşağıdaki haberlerden Türkçe günlük bir trend raporu hazırla.
 
-Çok önemli yazım kuralları:
+Kurallar:
 Markdown kullanma.
-** kullanma.
-# kullanma.
---- kullanma.
-Düz metin yaz.
-Türkçe karakterleri doğru kullan: ı, İ, ş, Ş, ğ, Ğ, ü, Ü, ö, Ö, ç, Ç.
+Yıldız, başlık işareti, çizgi ayırıcı kullanma.
+Düz ve temiz metin yaz.
+Türkçe karakterleri doğru kullan.
 
 Rapor formatı:
 1. Günün kısa özeti
@@ -87,18 +85,42 @@ Kaynak içerikler:
 
 
 def setup_turkish_font():
-    font_url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
+    font_name = "DejaVuSans"
     font_path = "DejaVuSans.ttf"
 
-    if not os.path.exists(font_path):
-        r = requests.get(font_url)
-        r.raise_for_status()
+    system_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/local/share/fonts/DejaVuSans.ttf",
+        "/Library/Fonts/Arial Unicode.ttf"
+    ]
 
-        with open(font_path, "wb") as f:
-            f.write(r.content)
+    for path in system_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont(font_name, path))
+            print(f"Font sistemden yüklendi: {path}")
+            return font_name
 
-    pdfmetrics.registerFont(TTFont("DejaVuSans", font_path))
-    return "DejaVuSans"
+    font_url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/version_2_37/ttf/DejaVuSans.ttf"
+
+    print("Font indiriliyor...")
+    response = requests.get(font_url, timeout=30)
+    response.raise_for_status()
+
+    with open(font_path, "wb") as f:
+        f.write(response.content)
+
+    pdfmetrics.registerFont(TTFont(font_name, font_path))
+    print("Font indirildi ve yüklendi.")
+
+    return font_name
+
+
+def clean_report_text(text):
+    text = text.replace("**", "")
+    text = text.replace("#", "")
+    text = text.replace("---", "")
+    text = text.replace("•", "-")
+    return text
 
 
 def create_pdf(report_text):
@@ -117,23 +139,15 @@ def create_pdf(report_text):
     )
 
     title_style = ParagraphStyle(
-        "TurkishTitle",
+        "TitleStyle",
         fontName=font_name,
         fontSize=18,
         leading=24,
         spaceAfter=16
     )
 
-    subtitle_style = ParagraphStyle(
-        "TurkishSubtitle",
-        fontName=font_name,
-        fontSize=10,
-        leading=14,
-        spaceAfter=16
-    )
-
     body_style = ParagraphStyle(
-        "TurkishBody",
+        "BodyStyle",
         fontName=font_name,
         fontSize=10,
         leading=14,
@@ -143,10 +157,10 @@ def create_pdf(report_text):
     story = []
 
     story.append(Paragraph("Günlük Moda & Tekstil Trend Raporu", title_style))
-    story.append(Paragraph(f"Tarih: {today}", subtitle_style))
-    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"Tarih: {today}", body_style))
+    story.append(Spacer(1, 16))
 
-    clean_text = report_text.replace("**", "").replace("#", "").replace("---", "")
+    clean_text = clean_report_text(report_text)
 
     for line in clean_text.split("\n"):
         if line.strip():
